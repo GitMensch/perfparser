@@ -473,33 +473,54 @@ static QFileInfo findDebugInfoFile(const QString &root, const QString &file,
 
     QFileInfo debugLinkFile;
 
+    // try in .debug folder
     if (!folder.isEmpty()) {
-        debugLinkFile.setFile(dir, folder + QDir::separator() + debugLinkString);
+        debugLinkFile.setFile(dir.path() + QDir::separator() + folder + QDir::separator() + QLatin1String(".debug")
+                              + QDir::separator() + debugLinkString);
         if (debugLinkFile.isFile())
             return debugLinkFile;
     }
 
-    debugLinkFile.setFile(dir, file + QDir::separator() + debugLinkString);
-    if (debugLinkFile.isFile())
-        return debugLinkFile;
-
-    // try again in .debug folder
-    if (!folder.isEmpty()) {
-        debugLinkFile.setFile(dir, folder + QDir::separator() + QLatin1String(".debug")
-                                    + QDir::separator() + debugLinkString);
-        if (debugLinkFile.isFile())
-            return debugLinkFile;
-    }
-
-    debugLinkFile.setFile(dir, file + QDir::separator() + QLatin1String(".debug")
-                                + QDir::separator() + debugLinkString);
+    debugLinkFile.setFile(dir.path() + QDir::separator() + file + QDir::separator() + QLatin1String(".debug")
+                          + QDir::separator() + debugLinkString);
     if (debugLinkFile.isFile())
         return debugLinkFile;
 
     // try again in /usr/lib/debug folder
-    debugLinkFile.setFile(dir, QLatin1String("usr") + QDir::separator() + QLatin1String("lib")
-                                + QDir::separator() + QLatin1String("debug") + QDir::separator() + folder
-                                + QDir::separator() + debugLinkString);
+    // on ubuntu a debug file for /usr/lib/X/Y is at /usr/lib/debug/lib/X/Y or /usr/lib/debug/usr/lib/X/Y
+    // to check both paths the front of the path is chopped of each iteration
+    // the same algorithm is used by libdwfl to look for debug symbols
+    auto path = folder.split(QDir::separator());
+    while (!path.isEmpty()) {
+        path = path.mid(path.indexOf(QDir::separator()) + 1);
+        debugLinkFile.setFile(dir.path() + QDir::separator() + QLatin1String("usr") + QDir::separator()
+                              + QLatin1String("lib") + QDir::separator() + QLatin1String("debug") + QDir::separator()
+                              + path.join(QDir::separator()) + QDir::separator() + debugLinkString);
+
+        if (debugLinkFile.isFile()) {
+            return debugLinkFile;
+        }
+
+        path.pop_front();
+    }
+
+    debugLinkFile.setFile(dir,
+                          QLatin1String("usr") + QDir::separator() + QLatin1String("lib") + QDir::separator()
+                              + QLatin1String("debug") + QDir::separator() + debugLinkString);
+
+    if (debugLinkFile.isFile()) {
+        return debugLinkFile;
+    }
+
+    // try the default files
+    if (!folder.isEmpty()) {
+        debugLinkFile.setFile(dir.path() + QDir::separator() + folder + QDir::separator() + debugLinkString);
+        if (debugLinkFile.isFile()) {
+            return debugLinkFile;
+        }
+    }
+
+    debugLinkFile.setFile(dir.path() + QDir::separator() + file + QDir::separator() + debugLinkString);
 
     return debugLinkFile;
 }
